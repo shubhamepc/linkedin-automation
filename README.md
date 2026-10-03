@@ -13,12 +13,13 @@ Koi bhi apne LinkedIn account aur apni Claude API key se use kar sakta hai. Sab 
 **Chahiye:** Python 3.10+, Google Chrome (recommended), ek [Claude API key](https://platform.claude.com/settings/keys), LinkedIn account (Premium = har invite mein note).
 
 ### Windows
-1. Folder download / unzip karo
+1. [ZIP download karo](https://github.com/shubhamepc/linkedin-automation/archive/refs/heads/main.zip) aur unzip karo
 2. `setup.bat` par double-click karo
 
 ### macOS / Linux
 ```bash
-cd "Linkedin Automation"
+git clone https://github.com/shubhamepc/linkedin-automation.git
+cd linkedin-automation
 chmod +x setup.sh && ./setup.sh
 ```
 
