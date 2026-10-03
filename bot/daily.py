@@ -197,7 +197,8 @@ def run_daily(scheduled=False, dry_run=False, force=False, max_invites=None):
                 except PWError as e:
                     log.warning("Page error (%s): %s", url, str(e).splitlines()[0])
                     db.update_profile(url, status="error", visited_at=now(), reason=str(e)[:200])
-                pacer.between_profiles()
+                if sent < quota:  # quota poora ho gaya to aakhri wait ki zaroorat nahi
+                    pacer.between_profiles()
 
             summary = f"{sent} invites bheje, {visited} profiles dekhe"
             notify("LinkedIn Automation", summary)
