@@ -1,0 +1,43 @@
+# LinkedIn Automation — settings
+# Values ko zarurat ke hisaab se badal sakte ho. Safe defaults pehle se set hain.
+
+schedule:
+  time: "10:30"              # roz kis time start ho (24h, Mac ka local time)
+  start_jitter_minutes: 75   # start time mein random 0-75 min ki deri (har din alag lage)
+  active_days: [mon, tue, wed, thu, fri, sat]   # sunday off
+
+limits:
+  weekly_cap: 80             # pichhle 7 din mein max invites (LinkedIn ~100/week allow karta hai)
+  warmup:                    # pehle hafte / doosre hafte roz ke [min, max] invites
+    - [5, 8]
+    - [8, 14]
+  normal: [12, 22]           # warm-up ke baad weekdays par
+  saturday: [3, 7]
+  skip_day_chance: 0.07      # kabhi-kabhi poora din skip (insaan bhi chhutti leta hai)
+  max_profile_visits: 70     # ek din mein max profile visits
+  visits_per_invite: 3.5     # quota ke hisaab se visit limit
+  withdraw_after_days: 21    # itne din se pending invites withdraw honge
+  max_withdraw_per_day: 5
+  min_acceptance_rate: 0.20  # isse kam acceptance par volume aadha ho jayega
+
+pacing:
+  between_profiles_sec: [40, 140]
+  break_every: [5, 9]        # har 5-9 profiles ke baad ek lamba break
+  break_minutes: [3, 9]
+
+ai:
+  model: claude-opus-5-5
+  effort: low                # low = sasta aur fast; quality ke liye "medium"
+  min_score: 70              # 0-100; isse upar wale hi invite honge
+  note_max_chars: 280        # Premium limit 300 hai; thoda margin rakha
+  note_language: English
+  send_without_note_if_note_fails: true
+
+search:
+  network: ["S"]             # S = 2nd-degree (best acceptance), O = 3rd+
+  pages_per_harvest: 2
+  extra_queries: []          # optional: apne search keywords, e.g. ["D2C founder India"]
+
+browser:
+  channel: chrome            # aapka installed Google Chrome use hoga
+  headless: false

@@ -1,0 +1,9 @@
+# Personal — kabhi share mat karna
+.env
+data/
+logs/
+
+.venv/
+__pycache__/
+*.pyc
+.DS_Store

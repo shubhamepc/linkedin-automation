@@ -1,0 +1,97 @@
+# LinkedIn Automation 🤝
+
+Roz automatic: LinkedIn par aapke niche ke **relevant** logon ko dhundhta hai, unki profile visit karta hai,
+AI se check karta hai ki woh aapke kaam ke hain ya nahi, aur **personalized note** ke saath connection request bhejta hai —
+utni hi jitni ek normal insaan bhejta (organic limits).
+
+Koi bhi apne LinkedIn account aur apni Claude API key se use kar sakta hai. Sab kuch command prompt / terminal se.
+
+---
+
+## ⚡ Quick start
+
+**Chahiye:** Python 3.10+, Google Chrome (recommended), ek [Claude API key](https://platform.claude.com/settings/keys), LinkedIn account (Premium = har invite mein note).
+
+### Windows
+1. Folder download / unzip karo
+2. `setup.bat` par double-click karo
+
+### macOS / Linux
+```bash
+cd "Linkedin Automation"
+chmod +x setup.sh && ./setup.sh
+```
+
+Setup ke baad `start` wizard khud chalega. Yeh 5 steps karata hai:
+
+| Step | Kya hota hai |
+|---|---|
+| 1. API key | Claude key poochta hai, `.env` mein save karta hai |
+| 2. LinkedIn connect | Browser khulta hai — **aap khud login karte ho** (password tool kabhi nahi dekhta / store karta) |
+| 3. Niche | AI aapki profile padhkar decide karta hai: aapka niche, kisse connect karna hai, kaunse search keywords |
+| 4. Test run | 3 profiles visit + score + note dikhata hai — **kuch send nahi** |
+| 5. Schedule | Roz kis time chalana hai (Windows Task Scheduler / macOS launchd / Linux cron) |
+
+---
+
+## 🧠 Kaise kaam karta hai
+
+```
+Aapki profile ──AI──▶ niche + ideal connections + search keywords   (ek baar)
+
+Roz:
+ 1. Accepted invites sync + 3 hafte purane pending invites withdraw
+ 2. LinkedIn search (2nd-degree) se naye profiles
+ 3. Har profile: visit → padhna (scroll) → AI score 0-100 + uska niche
+ 4. Score ≥ 70  →  Connect + personalized note (≤ 280 chars)
+ 5. Random gaps (40-140s) + beech mein breaks → report + notification
+```
+
+## 🛡️ Organic limits (account safety)
+
+| | Default |
+|---|---|
+| Week 1 / Week 2 (warm-up) | 5-8 / 8-14 per day |
+| Uske baad | 12-22 weekdays, 3-7 Saturday, Sunday off |
+| Weekly cap | 80 (LinkedIn ~100 allow karta hai) |
+| Start time | Roz alag (schedule + 0-75 min random) |
+| Kabhi-kabhi | Poora din rest |
+| Acceptance < 20% | Volume apne aap aadha |
+| CAPTCHA / warning / limit | **Turant stop** + 3-4 din cooldown + notification |
+
+Sab `config.yaml` mein badal sakte ho.
+
+## 🔧 Commands
+
+> Windows: `.venv\Scripts\python run.py ...`  · macOS/Linux: `.venv/bin/python run.py ...`
+
+| Command | Kaam |
+|---|---|
+| `run.py start` | Guided setup (kabhi bhi dobara chala sakte ho) |
+| `run.py run --dry-run` | Test: 3 profiles, kuch send nahi |
+| `run.py run` | Abhi aaj ka run |
+| `run.py run --max 5` | Aaj sirf 5 |
+| `run.py stats` | Report: sent, accepted, acceptance rate |
+| `run.py setup` | Niche dobara detect karo |
+| `run.py login` | LinkedIn session expire ho jaye to |
+| `run.py schedule` / `unschedule` | Daily auto-run on / off |
+
+**Niche khud set karna ho:** `data/my_profile.json` edit karo (ideal connections, search keywords, note style).
+**Apne keywords add karne:** `config.yaml` → `search.extra_queries`.
+
+## ⚠️ Zaroori baatein
+
+- LinkedIn ki User Agreement automation tools allow nahi karti. Isliye account restrict hone ka risk hai. Limits conservative rakhi hain, par risk zero nahi hai. **Use apni zimmedari par karein.**
+- LinkedIn ki language **English** rakhein (buttons English text se pehchane jaate hain).
+- Scheduled time par computer **on** hona chahiye aur aap usme logged-in hone chahiye. Run ke time browser window khulti hai, use band na karein.
+- LinkedIn apna design badalta rehta hai. Koi button na mile to woh profile skip ho jaati hai. Details `logs/` mein milengi.
+- Claude API cost: lagbhag $0.01-0.03 per profile. Ek normal din mein 40-60 profiles.
+
+## 📁 Share karte waqt
+
+`data/` (aapka LinkedIn login session + database), `.env` (API key) aur `logs/` **kabhi share mat karna**. `.gitignore` inhe pehle se exclude karta hai.
+Zip banana ho to:
+
+```bash
+zip -r linkedin-automation.zip . -x ".venv/*" "data/*" "logs/*" ".env" "*__pycache__*"
+```
