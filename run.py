@@ -39,47 +39,111 @@ def yes(q: str, default=True) -> bool:
 
 # ---------------- login ----------------
 
-def login_flow(page) -> bool:
-    page.goto("https://www.linkedin.com/feed/")
-    page.wait_for_timeout(3000)
-    if "/feed" in page.url:
-        print("✅ LinkedIn pehle se logged in hai.")
-        return True
-    page.goto("https://www.linkedin.com/login")
-    print("\n👉 Khule hue browser mein apne LinkedIn account se login karo (2FA bhi).")
-    print("   Password sirf browser mein daalna — yeh tool use store nahi karta.")
-    input("   Feed dikhne lage to yahan Enter dabao… ")
-    page.goto("https://www.linkedin.com/feed/")
-    page.wait_for_timeout(3000)
-    ok = "/feed" in page.url
-    print("✅ Login session save ho gaya." if ok else "⚠️  Login confirm nahi hua.")
-    return ok
-
-
-def cmd_login(_):
+def check_login() -> bool:
+    """Bot wale browser profile mein LinkedIn logged-in hai ya nahi."""
     from playwright.sync_api import sync_playwright
     from bot.linkedin import open_browser
 
     with sync_playwright() as pw:
         ctx, page = open_browser(pw)
         try:
-            login_flow(page)
+            page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded")
+            page.wait_for_timeout(3000)
+            return "/feed" in page.url
         finally:
             ctx.close()
+
+
+def login_flow() -> bool:
+    from bot.linkedin import open_plain_chrome
+
+    if check_login():
+        print("✅ LinkedIn pehle se connected hai.")
+        return True
+
+    proc = open_plain_chrome("https://www.linkedin.com/login")
+    if proc:
+        quit_key = "Cmd + Q" if sys.platform == "darwin" else "window band (X)"
+        print("\n👉 Ek nayi Chrome window khuli hai (normal Chrome, koi automation nahi).")
+        print("   1. Usme apne LinkedIn account se login karo (OTP/2FA bhi).")
+        print("   2. Feed (home page) dikh jaye to 10 second ruko,")
+        print(f"   3. phir us Chrome ko {quit_key} se band karo — tabhi login save hota hai.")
+        print("   Password sirf browser mein daalna — yeh tool use store nahi karta.")
+        print("   ⏳ Chrome band hone ka wait kar rahe hain…")
+        proc.wait()
+    else:
+        # Chrome installed nahi — Playwright window mein hi login
+        from playwright.sync_api import sync_playwright
+        from bot.linkedin import open_browser
+        with sync_playwright() as pw:
+            ctx, page = open_browser(pw)
+            page.goto("https://www.linkedin.com/login")
+            print("\n👉 Khuli hui browser window mein LinkedIn login karo.")
+            input("   Feed dikhne lage to yahan Enter dabao… ")
+            ctx.close()
+
+    ok = check_login()
+    print("✅ LinkedIn connect ho gaya, session save hai." if ok
+          else "⚠️  Login confirm nahi hua — dobara try karo: python run.py login")
+    return ok
+
+
+def cmd_login(_):
+    login_flow()
+
+
+def setup_keywords(page):
+    """Free mode: aapki headline se suggestions, aap confirm/edit karo."""
+    from bot import linkedin as li
+    from bot.ai import load_my_profile, save_my_profile
+    from bot.rules import DEFAULT_EXCLUDE, build_profile, suggest_keywords
+
+    li.goto(page, "https://www.linkedin.com/in/me/")
+    info = li.top_card_info(page)
+    old = load_my_profile()
+    print(f"\n   Aap: {info['name']} — {info['headline']}")
+    print("\n   Kin logon se connect karna hai? Unki headline/profile mein kya likha hota hai?")
+    print("   Comma se alag likho, e.g.:  founder, marketing manager, D2C, HR head")
+    default = ", ".join(old.ideal_connections if old else suggest_keywords(info["headline"]))
+    targets = split_list(ask("   Target keywords", default))
+    excl = split_list(ask("   Inhe skip karo", ", ".join(old.not_relevant if old else DEFAULT_EXCLUDE)))
+    queries = split_list(ask("   LinkedIn search mein kya type karein", ", ".join(
+        old.search_queries if old else targets)))
+    if not targets:
+        sys.exit("Kam se kam ek target keyword chahiye.")
+    me = build_profile(info["name"], info["headline"], targets, excl, queries or targets)
+    save_my_profile(me)
+    return me
+
+
+def split_list(text: str) -> list[str]:
+    return [x.strip() for x in text.split(",") if x.strip()]
+
+
+def setup_niche(page, redo: bool):
+    from bot.ai import load_my_profile
+    from bot.daily import setup_my_profile
+
+    me = load_my_profile()
+    if me and not redo:
+        return me
+    if CFG["ai"].get("mode") == "claude":
+        return setup_my_profile(page)
+    return setup_keywords(page)
 
 
 def cmd_setup(_):
     from playwright.sync_api import sync_playwright
     from bot import linkedin as li
-    from bot.daily import setup_my_profile
 
     with sync_playwright() as pw:
         ctx, page = li.open_browser(pw)
         try:
             li.ensure_logged_in(page)
-            setup_my_profile(page)
+            setup_niche(page, redo=True)
         finally:
             ctx.close()
+    print(f"✅ Saved: {MY_PROFILE_PATH}")
 
 
 # ---------------- start wizard ----------------
@@ -102,10 +166,15 @@ def ensure_api_key():
     print("✅ .env mein save ho gaya.")
 
 
-def set_schedule_time(hhmm: str):
+def set_config_line(key: str, value: str):
+    """config.yaml mein ek line badlo (comments waise hi rehte hain)."""
     path = ROOT / "config.yaml"
-    text = re.sub(r'(^\s*time:\s*)"[^"]*"', rf'\g<1>"{hhmm}"', path.read_text(), count=1, flags=re.M)
+    text = re.sub(rf"(^\s*{key}:\s*)(\"[^\"]*\"|\S+)", rf"\g<1>{value}", path.read_text(), count=1, flags=re.M)
     path.write_text(text)
+
+
+def set_schedule_time(hhmm: str):
+    set_config_line("time", f'"{hhmm}"')
     CFG["schedule"]["time"] = hhmm
 
 
@@ -113,24 +182,31 @@ def cmd_start(_):
     from playwright.sync_api import sync_playwright
     from bot import linkedin as li
     from bot.ai import load_my_profile
-    from bot.daily import setup_my_profile
 
     print("\n=== LinkedIn Automation — setup ===\n")
-    print("Step 1/5 · Claude API key")
-    ensure_api_key()
+    print("Step 1/5 · Mode")
+    print("   FREE mode : aapke keywords se profiles chunega, template se note (koi kharcha nahi)")
+    print("   AI mode   : Claude har profile padhkar personal note likhega (paid, ~$1/din)")
+    use_ai = yes("   AI mode use karein?", default=CFG["ai"].get("mode") == "claude")
+    mode = "claude" if use_ai else "rules"
+    set_config_line("mode", mode)
+    CFG["ai"]["mode"] = mode
+    if use_ai:
+        ensure_api_key()
+    else:
+        print("✅ FREE mode.")
 
     print("\nStep 2/5 · LinkedIn connect")
+    if not login_flow():
+        sys.exit("Login ke bina aage nahi badh sakte. Dobara: python run.py start")
+
+    print("\nStep 3/5 · Kin logon se connect karna hai")
     with sync_playwright() as pw:
         ctx, page = li.open_browser(pw)
         try:
-            if not login_flow(page):
-                sys.exit("Login ke bina aage nahi badh sakte. Dobara: python run.py start")
-
-            print("\nStep 3/5 · Aapka niche (AI aapki profile padhega)")
-            me = load_my_profile()
-            if not me or yes("Niche dobara detect karein?", default=False):
-                me = setup_my_profile(page)
-            print(f"\n   Niche           : {me.my_niche}")
+            redo = load_my_profile() is not None and yes("Pehle wali settings badalni hain?", default=False)
+            me = setup_niche(page, redo=redo)
+            print(f"\n   Aapka niche     : {me.my_niche}")
             print("   Kisse connect   : " + "\n                     ".join(me.ideal_connections))
             print(f"   Search keywords : {', '.join(me.search_queries)}")
             print(f"   (badalna ho to edit karo: {MY_PROFILE_PATH})")
@@ -247,10 +323,14 @@ def main():
     sub.add_parser("schedule").set_defaults(fn=cmd_schedule)
     sub.add_parser("unschedule").set_defaults(fn=cmd_unschedule)
     args = ap.parse_args()
+    from bot.ai import AIError
     try:
         args.fn(args)
     except KeyboardInterrupt:
         log.info("Ruk gaya (Ctrl+C)")
+    except AIError as e:
+        print(f"\n❌ {e}\n   Theek karke dobara chalao: python run.py {args.cmd}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

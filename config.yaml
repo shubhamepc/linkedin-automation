@@ -26,12 +26,23 @@ pacing:
   break_minutes: [3, 9]
 
 ai:
+  mode: rules                # rules = FREE (keywords + note templates) | claude = AI (paid, best quality)
   model: claude-opus-5-5
   effort: low                # low = sasta aur fast; quality ke liye "medium"
   min_score: 70              # 0-100; isse upar wale hi invite honge
   note_max_chars: 280        # Premium limit 300 hai; thoda margin rakha
   note_language: English
   send_without_note_if_note_fails: true
+
+rules:                       # sirf free mode (mode: rules) mein use hota hai
+  # Placeholders: {first_name} {company} {topic} (match hua keyword) {my_name}
+  note_templates:
+    - "Hi {first_name}, came across your profile and liked what you're doing at {company}. Would be great to connect and follow your work!"
+    - "Hi {first_name}, your work at {company} caught my eye. Always good to connect with people in a similar space. Happy to connect!"
+    - "Hi {first_name}, I've been connecting with professionals in my field and your profile at {company} stood out. Would love to connect. – {my_name}"
+  note_templates_no_company:
+    - "Hi {first_name}, came across your profile and liked your background. Would be great to connect and follow your work!"
+    - "Hi {first_name}, your profile caught my eye. Always good to connect with people in a similar space. Happy to connect!"
 
 search:
   network: ["S"]             # S = 2nd-degree (best acceptance), O = 3rd+

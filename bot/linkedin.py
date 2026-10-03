@@ -1,6 +1,11 @@
 """LinkedIn page actions. Selectors English UI ke liye hain — LinkedIn language English rakhein."""
+import os
 import random
 import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
 
 from playwright.sync_api import Error as PWError, Page, TimeoutError as PWTimeout
@@ -37,6 +42,38 @@ def open_browser(pw):
     page = ctx.pages[0] if ctx.pages else ctx.new_page()
     page.set_default_timeout(15000)
     return ctx, page
+
+
+def find_chrome() -> str | None:
+    """Installed Google Chrome ka path (login ke liye normal window kholne ke kaam aata hai)."""
+    candidates = {
+        "darwin": ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                   str(Path.home() / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome")],
+        "win32": [os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe"),
+                  os.path.expandvars(r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"),
+                  os.path.expandvars(r"%LocalAppData%\Google\Chrome\Application\chrome.exe")],
+    }.get(sys.platform, [])
+    for path in candidates:
+        if Path(path).exists():
+            return path
+    return shutil.which("google-chrome") or shutil.which("google-chrome-stable")
+
+
+def open_plain_chrome(url: str) -> subprocess.Popen | None:
+    """Bina automation ke normal Chrome window — usi profile folder ke saath jo bot use karta hai.
+    Login yahan karne se LinkedIn ko bilkul normal browser dikhta hai."""
+    chrome = find_chrome()
+    if not chrome:
+        return None
+    BROWSER_PROFILE.mkdir(parents=True, exist_ok=True)
+    args = [chrome, f"--user-data-dir={BROWSER_PROFILE}", "--no-first-run",
+            "--no-default-browser-check", "--new-window"]
+    # Cookies usi tarah encrypt hon jaise Playwright padhta hai, warna bot ko login nahi dikhega
+    if sys.platform == "darwin":
+        args.append("--use-mock-keychain")
+    elif sys.platform.startswith("linux"):
+        args.append("--password-store=basic")
+    return subprocess.Popen(args + [url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 # ---------- helpers ----------
@@ -115,16 +152,34 @@ def search_people(page: Page, query: str, page_no: int) -> list[str]:
 
 CONNECT_SEL = ('button[aria-label*="to connect"], a[aria-label*="to connect"], '
                'a[href*="/custom-invite/"]')
-MENU_CONNECT_SEL = ('[role="menu"] [aria-label*="to connect"], '
-                    '.artdeco-dropdown__content [aria-label*="to connect"], '
-                    '[role="menuitem"]:has-text("Connect")')
 PENDING_SEL = 'button[aria-label*="Pending"], a[aria-label*="Pending"], button:has-text("Pending")'
 MORE_SEL = 'button[aria-label="More actions"], button[aria-label="More"]'
 
 
+def profile_name(page: Page) -> str:
+    """Page title 'Naam | LinkedIn' se naam (h1/h2 badalte rehte hain, title nahi)."""
+    name = page.title().split("|")[0].strip()
+    return re.sub(r"^\(\d+\)\s*", "", name)  # "(3) Naam" = notification count
+
+
 def _top_card(page: Page):
-    card = page.locator("main section").filter(has=page.locator("h1")).first
-    return card if card.count() else page.locator("main").first
+    """Profile ka top card: woh (sabse andar wala) section jiski heading mein us insaan ka naam hai."""
+    name = profile_name(page)
+    for tag in ("h1", "h2"):
+        heading = page.locator(tag, has_text=name) if name else page.locator(tag)
+        card = page.locator("main section").filter(has=heading)
+        if card.count():
+            return card.last
+    return page.locator("main section").first
+
+
+def _connect_sel(page: Page) -> str:
+    """Sirf ISI insaan ka Connect button — 'People you may know' wale kisi aur ka nahi."""
+    name = profile_name(page).replace('"', '\\"')
+    if name:
+        return (f'[aria-label="Invite {name} to connect"], '
+                f'a[href*="/custom-invite/"][aria-label*="{name}"]')
+    return CONNECT_SEL
 
 
 def visit_profile(page: Page, url: str) -> str:
@@ -137,12 +192,36 @@ def visit_profile(page: Page, url: str) -> str:
     return page.locator("main").inner_text()[:8000]
 
 
+SKIP_LINE = re.compile(r"^(·\s*)?(1st|2nd|3rd\+?)\b|degree connection|^(he|she|they)/|^verified|"
+                       r"^contact info|followers|connections$", re.I)
+
+
+def top_card_info(page: Page) -> dict:
+    """Naam, headline, current company — profile ke top card se."""
+    top = _top_card(page)
+    name = profile_name(page)
+
+    lines = [l.strip() for l in top.inner_text().splitlines() if l.strip()]
+    start = lines.index(name) + 1 if name in lines else 0
+    headline = next((l for l in lines[start:] if len(l) > 3 and not SKIP_LINE.search(l)), "")
+
+    company = ""
+    btn = top.locator('[aria-label^="Current company"]')
+    if btn.count():
+        label = btn.first.get_attribute("aria-label") or ""
+        company = re.sub(r"^Current company:\s*", "", label).split(". ")[0].strip(" .")
+    if not company:
+        m = re.search(r"(?:\bat\b|@)\s*([A-Z0-9][\w&.\- ]{1,40}?)(?:\s*[|•·,]|$)", headline)
+        company = m.group(1).strip() if m else ""
+    return {"name": name, "headline": headline, "company": company}
+
+
 def connection_state(page: Page) -> str:
     """connect | connect_in_more | pending | connected | unavailable"""
     top = _top_card(page)
     if top.locator(PENDING_SEL).filter(visible=True).count():
         return "pending"
-    if top.locator(CONNECT_SEL).filter(visible=True).count():
+    if top.locator(_connect_sel(page)).filter(visible=True).count():
         return "connect"
     if re.search(r"·\s*1st\b", top.inner_text()):
         return "connected"
@@ -150,7 +229,7 @@ def connection_state(page: Page) -> str:
     if more.count():
         more.first.click()
         sleep_range(0.8, 1.6)
-        found = page.locator(MENU_CONNECT_SEL).filter(visible=True).count() > 0
+        found = page.locator(_connect_sel(page)).filter(visible=True).count() > 0
         page.keyboard.press("Escape")
         sleep_range(0.5, 1)
         if found:
@@ -173,9 +252,9 @@ def send_invite(page: Page, note: str | None, via_more: bool) -> str:
     if via_more:
         top.locator(MORE_SEL).filter(visible=True).first.click()
         sleep_range(0.8, 1.6)
-        page.locator(MENU_CONNECT_SEL).filter(visible=True).first.click()
+        page.locator(_connect_sel(page)).filter(visible=True).first.click()
     else:
-        top.locator(CONNECT_SEL).filter(visible=True).first.click()
+        top.locator(_connect_sel(page)).filter(visible=True).first.click()
     sleep_range(1.5, 3)
 
     try:

@@ -12,6 +12,7 @@ from .ai import AIError, analyze_my_profile, evaluate_profile, load_my_profile, 
 from .config import CFG, MY_PROFILE_PATH, log
 from .db import DB, now
 from .pacing import Pacer, daily_quota, sleep_range
+from .rules import evaluate_rules
 
 
 def notify(title: str, msg: str):
@@ -131,7 +132,12 @@ def run_daily(scheduled=False, dry_run=False, force=False, max_invites=None):
         ctx, page = li.open_browser(pw)
         try:
             li.ensure_logged_in(page)
-            me = load_my_profile() or setup_my_profile(page)
+            use_ai = CFG["ai"].get("mode") == "claude"
+            me = load_my_profile()
+            if not me:
+                if not use_ai:
+                    raise li.NotLoggedIn("Pehle setup karo: python run.py start  (keywords set karne hain)")
+                me = setup_my_profile(page)
 
             if not dry_run:
                 housekeeping(db, page)
@@ -156,7 +162,10 @@ def run_daily(scheduled=False, dry_run=False, force=False, max_invites=None):
                         pacer.between_profiles()
                         continue
 
-                    ev = evaluate_profile(me, text)
+                    if use_ai:
+                        ev = evaluate_profile(me, text)
+                    else:
+                        ev = evaluate_rules(me, li.top_card_info(page), text)
                     fields = dict(name=ev.full_name, headline=ev.headline, niche=ev.their_niche,
                                   score=ev.relevance_score, reason=ev.reason, note=ev.connection_note,
                                   visited_at=now())

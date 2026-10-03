@@ -58,6 +58,9 @@ def _parse(system: str, user: str, schema):
     except anthropic.RateLimitError as e:
         raise AIError("Claude API rate limit — thodi der baad") from e
     except anthropic.APIStatusError as e:
+        if "credit balance" in str(e.message).lower():
+            raise AIError("Claude API account mein credits khatam hain — "
+                          "https://platform.claude.com/settings/billing par credits add karo") from e
         raise AIError(f"Claude API error {e.status_code}: {e.message}") from e
     except anthropic.APIConnectionError as e:
         raise AIError("Claude API tak network nahi pahuncha") from e

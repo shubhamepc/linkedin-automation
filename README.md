@@ -4,13 +4,18 @@ Roz automatic: LinkedIn par aapke niche ke **relevant** logon ko dhundhta hai, u
 AI se check karta hai ki woh aapke kaam ke hain ya nahi, aur **personalized note** ke saath connection request bhejta hai —
 utni hi jitni ek normal insaan bhejta (organic limits).
 
-Koi bhi apne LinkedIn account aur apni Claude API key se use kar sakta hai. Sab kuch command prompt / terminal se.
+Koi bhi apne LinkedIn account se use kar sakta hai. Sab kuch command prompt / terminal se.
+
+| Mode | Kaise chunta hai | Note | Kharcha |
+|---|---|---|---|
+| **FREE** (default) | Aapke keywords profile ki headline/about mein match hon | Templates — naam + company khud bhar jaate hain | ₹0 |
+| **AI** (optional) | Claude har profile padhkar 0-100 score deta hai | Har insaan ke liye alag personal note | ~$1/din (Claude API) |
 
 ---
 
 ## ⚡ Quick start
 
-**Chahiye:** Python 3.10+, Google Chrome (recommended), ek [Claude API key](https://platform.claude.com/settings/keys), LinkedIn account (Premium = har invite mein note).
+**Chahiye:** Python 3.10+, Google Chrome (recommended), LinkedIn account (Premium = har invite mein note). AI mode ke liye [Claude API key](https://platform.claude.com/settings/keys) + credits.
 
 ### Windows
 1. [ZIP download karo](https://github.com/shubhamepc/linkedin-automation/archive/refs/heads/main.zip) aur unzip karo
@@ -27,9 +32,9 @@ Setup ke baad `start` wizard khud chalega. Yeh 5 steps karata hai:
 
 | Step | Kya hota hai |
 |---|---|
-| 1. API key | Claude key poochta hai, `.env` mein save karta hai |
-| 2. LinkedIn connect | Browser khulta hai — **aap khud login karte ho** (password tool kabhi nahi dekhta / store karta) |
-| 3. Niche | AI aapki profile padhkar decide karta hai: aapka niche, kisse connect karna hai, kaunse search keywords |
+| 1. Mode | FREE ya AI. AI chuna to Claude key poochta hai (`.env` mein save) |
+| 2. LinkedIn connect | Normal Chrome window khulti hai — **aap khud login karte ho**, phir Cmd+Q / window band. Password tool kabhi nahi dekhta |
+| 3. Kisse connect | FREE: aapki headline se keywords suggest, aap edit/confirm karo. AI: Claude aapki profile padhkar khud decide karta hai |
 | 4. Test run | 3 profiles visit + score + note dikhata hai — **kuch send nahi** |
 | 5. Schedule | Roz kis time chalana hai (Windows Task Scheduler / macOS launchd / Linux cron) |
 
@@ -77,7 +82,9 @@ Sab `config.yaml` mein badal sakte ho.
 | `run.py login` | LinkedIn session expire ho jaye to |
 | `run.py schedule` / `unschedule` | Daily auto-run on / off |
 
-**Niche khud set karna ho:** `data/my_profile.json` edit karo (ideal connections, search keywords, note style).
+**Keywords / niche badalne:** `run.py setup` ya `data/my_profile.json` edit karo.
+**Note templates (FREE mode):** `config.yaml` → `rules.note_templates`.
+**AI mode on/off:** `config.yaml` → `ai.mode: claude` / `rules` (ya `run.py start` dobara).
 **Apne keywords add karne:** `config.yaml` → `search.extra_queries`.
 
 ## ⚠️ Zaroori baatein
@@ -86,7 +93,7 @@ Sab `config.yaml` mein badal sakte ho.
 - LinkedIn ki language **English** rakhein (buttons English text se pehchane jaate hain).
 - Scheduled time par computer **on** hona chahiye aur aap usme logged-in hone chahiye. Run ke time browser window khulti hai, use band na karein.
 - LinkedIn apna design badalta rehta hai. Koi button na mile to woh profile skip ho jaati hai. Details `logs/` mein milengi.
-- Claude API cost: lagbhag $0.01-0.03 per profile. Ek normal din mein 40-60 profiles.
+- AI mode cost: lagbhag $0.01-0.03 per profile (ek din mein 40-60 profiles). FREE mode mein koi kharcha nahi.
 
 ## 📁 Share karte waqt
 
