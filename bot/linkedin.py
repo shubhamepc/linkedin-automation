@@ -210,6 +210,11 @@ def top_card_info(page: Page) -> dict:
     if btn.count():
         label = btn.first.get_attribute("aria-label") or ""
         company = re.sub(r"^Current company:\s*", "", label).split(". ")[0].strip(" .")
+    if not company and "Contact info" in lines:
+        # Top card: "... / Contact info / <current company> / <college> / 52 / connections"
+        nxt = lines[lines.index("Contact info") + 1:][:1]
+        if nxt and not re.search(r"^\d|connections|followers|mutual", nxt[0], re.I):
+            company = nxt[0]
     if not company:
         m = re.search(r"(?:\bat\b|@)\s*([A-Z0-9][\w&.\- ]{1,40}?)(?:\s*[|•·,]|$)", headline)
         company = m.group(1).strip() if m else ""
