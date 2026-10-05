@@ -14,6 +14,7 @@ from .config import BROWSER_PROFILE, CFG, log
 from .pacing import human_scroll, sleep_range
 
 BASE = "https://www.linkedin.com"
+PY = r".venv\Scripts\python" if sys.platform == "win32" else ".venv/bin/python"
 
 
 class SafetyStop(Exception):
@@ -103,7 +104,7 @@ def check_safety(page: Page):
     url = page.url
     if any(m in url for m in SAFETY_URL_MARKERS):
         if "/uas/login" in url or "/login" in url:
-            raise NotLoggedIn("LinkedIn is not logged in (or the login expired) — run: python run.py login")
+            raise NotLoggedIn(f"LinkedIn is not logged in (or the login expired) — run: {PY} run.py login")
         raise SafetyStop(f"LinkedIn security check page: {url}", cooldown_days=3)
     try:
         body = page.locator("body").inner_text(timeout=5000)[:20000]
@@ -122,7 +123,7 @@ def goto(page: Page, url: str):
 def ensure_logged_in(page: Page):
     goto(page, f"{BASE}/feed/")
     if "/feed" not in page.url:
-        raise NotLoggedIn("LinkedIn is not logged in — run: python run.py login")
+        raise NotLoggedIn(f"LinkedIn is not logged in — run: {PY} run.py login")
 
 
 # ---------- my profile ----------
