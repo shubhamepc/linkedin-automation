@@ -178,11 +178,15 @@ def run_daily(scheduled=False, dry_run=False, force=False, max_invites=None):
                         log.info("   [dry run] note: %s", ev.connection_note)
                         db.update_profile(url, **fields)  # status 'new' hi rahega
                     else:
-                        result = li.send_invite(page, ev.connection_note, via_more=(state == "connect_in_more"))
+                        month = date.today().strftime("%Y-%m")
+                        note = None if db.get("notes_exhausted_month") == month else ev.connection_note
+                        result = li.send_invite(page, note, via_more=(state == "connect_in_more"))
                         log.info("   → %s", result)
-                        if result in ("sent", "sent_without_note"):
+                        if result in ("sent_notes_exhausted", "notes_exhausted"):
+                            db.set("notes_exhausted_month", month)
+                        if result in ("sent", "sent_without_note", "sent_notes_exhausted"):
                             sent += 1
-                            if result == "sent_without_note":
+                            if result != "sent":
                                 fields["note"] = None
                             db.update_profile(url, status="sent", sent_at=now(), **fields)
                         elif result == "limit":

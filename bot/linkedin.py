@@ -251,8 +251,10 @@ def _close_dialog(page: Page):
     sleep_range(0.5, 1)
 
 
-def send_invite(page: Page, note: str | None, via_more: bool) -> str:
-    """Returns: sent | sent_without_note | email_required | limit | failed"""
+NOTES_EXHAUSTED_TEXT = re.compile(r"out of free custom notes|personalized invites with premium", re.I)
+
+
+def _open_connect_dialog(page: Page, via_more: bool):
     top = _top_card(page)
     if via_more:
         top.locator(MORE_SEL).filter(visible=True).first.click()
@@ -261,11 +263,19 @@ def send_invite(page: Page, note: str | None, via_more: bool) -> str:
     else:
         top.locator(_connect_sel(page)).filter(visible=True).first.click()
     sleep_range(1.5, 3)
-
     try:
         dlg = _dialog(page)
         dlg.wait_for(state="visible", timeout=8000)
+        return dlg
     except PWTimeout:
+        return None
+
+
+def send_invite(page: Page, note: str | None, via_more: bool) -> str:
+    """Returns: sent | sent_without_note | sent_notes_exhausted | notes_exhausted |
+    email_required | limit | failed"""
+    dlg = _open_connect_dialog(page, via_more)
+    if dlg is None:
         log.warning("Connect dialog nahi khula")
         return "failed"
 
@@ -277,22 +287,35 @@ def send_invite(page: Page, note: str | None, via_more: bool) -> str:
         _close_dialog(page)
         return "email_required"
 
-    note_added = False
+    note_added = notes_exhausted = False
     if note:
         add = dlg.get_by_role("button", name=re.compile(r"add a (free )?note", re.I))
         if add.count():
             add.first.click()
             sleep_range(1, 2)
-        box = _dialog(page).locator("textarea").first
-        if box.count():
-            box.click()
-            sleep_range(0.5, 1.2)
-            box.press_sequentially(note, delay=random.randint(35, 90))
-            sleep_range(1.5, 4)
-            note_added = True
-        elif not CFG["ai"].get("send_without_note_if_note_fails", True):
+        if NOTES_EXHAUSTED_TEXT.search(_dialog(page).inner_text()):
+            # Free account: is mahine ke custom notes khatam — Premium offer band karke bina note bhejo
+            log.info("   LinkedIn free notes khatam (Premium nahi hai)")
+            notes_exhausted = True
             _close_dialog(page)
-            return "failed"
+            if not CFG["ai"].get("send_without_note_if_note_fails", True):
+                return "notes_exhausted"
+            page.reload(wait_until="domcontentloaded")  # popup ke baad layout badal jaata hai
+            sleep_range(3, 5)
+            dlg = _open_connect_dialog(page, via_more)
+            if dlg is None:
+                return "failed"
+        else:
+            box = _dialog(page).locator("textarea").first
+            if box.count():
+                box.click()
+                sleep_range(0.5, 1.2)
+                box.press_sequentially(note, delay=random.randint(35, 90))
+                sleep_range(1.5, 4)
+                note_added = True
+            elif not CFG["ai"].get("send_without_note_if_note_fails", True):
+                _close_dialog(page)
+                return "failed"
 
     dlg = _dialog(page)
     send = dlg.get_by_role("button", name=re.compile(r"^send( invitation| now)?$", re.I))
@@ -312,7 +335,9 @@ def send_invite(page: Page, note: str | None, via_more: bool) -> str:
         # dialog abhi bhi khula hai — kuch atka
         _close_dialog(page)
         return "failed"
-    return "sent" if note_added else "sent_without_note"
+    if note_added:
+        return "sent"
+    return "sent_notes_exhausted" if notes_exhausted else "sent_without_note"
 
 
 def withdraw_invite(page: Page) -> bool:

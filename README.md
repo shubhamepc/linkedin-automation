@@ -15,7 +15,7 @@ Koi bhi apne LinkedIn account se use kar sakta hai. Sab kuch command prompt / te
 
 ## ⚡ Quick start
 
-**Chahiye:** Python 3.10+, Google Chrome (recommended), LinkedIn account (Premium = har invite mein note). AI mode ke liye [Claude API key](https://platform.claude.com/settings/keys) + credits.
+**Chahiye:** Python 3.10+, Google Chrome (recommended), LinkedIn account. **Premium** = har invite mein note; **free account** = mahine ke kuch free notes, uske baad bot apne aap bina note ke invite bhejta hai. AI mode ke liye [Claude API key](https://platform.claude.com/settings/keys) + credits.
 
 ### Windows
 1. [ZIP download karo](https://github.com/shubhamepc/linkedin-automation/archive/refs/heads/main.zip) aur unzip karo
