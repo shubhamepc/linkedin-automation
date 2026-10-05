@@ -3,6 +3,13 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+PY_OK=$(command -v python3.13 || command -v python3.12 || command -v python3.11 || command -v python3.10 || true)
+if ! command -v uv >/dev/null 2>&1 && [ -z "$PY_OK" ]; then
+  echo "Python 3.10+ nahi mila — uv (official installer, astral.sh) install kar rahe hain..."
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$PATH"
+fi
+
 if command -v uv >/dev/null 2>&1; then
   uv venv --python 3.12 .venv
   uv pip install --python .venv/bin/python -r requirements.txt
