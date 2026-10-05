@@ -1,4 +1,4 @@
-"""Roz kitne invites, aur actions ke beech insaan jaisi speed."""
+"""How many invites per day, and human-like pacing between actions."""
 import random
 import time
 from datetime import date, datetime
@@ -13,7 +13,7 @@ def sleep_range(lo: float, hi: float):
 
 
 def human_scroll(page, steps=None):
-    """Profile ko padhne jaisa scroll — kabhi neeche, kabhi thoda upar."""
+    """Scroll like someone reading — mostly down, sometimes a little back up."""
     for _ in range(steps or random.randint(3, 6)):
         page.mouse.wheel(0, random.randint(250, 700))
         sleep_range(0.8, 3.0)
@@ -23,17 +23,17 @@ def human_scroll(page, steps=None):
 
 
 def daily_quota(db, today: date | None = None) -> tuple[int, str]:
-    """Aaj ka invite quota aur uski wajah."""
+    """Today's invite quota and the reason for it."""
     today = today or date.today()
     lim = CFG["limits"]
     day = DAY_NAMES[today.weekday()]
 
     if day not in CFG["schedule"]["active_days"]:
-        return 0, f"{day} off day hai"
+        return 0, f"{day} is an off day"
 
     cooldown = db.get("cooldown_until")
     if cooldown and datetime.fromisoformat(cooldown) > datetime.now():
-        return 0, f"cooldown {cooldown} tak (LinkedIn warning/limit ke baad)"
+        return 0, f"paused until {cooldown} (after a LinkedIn warning/limit)"
 
     if random.random() < lim["skip_day_chance"]:
         return 0, "random rest day"
@@ -55,22 +55,22 @@ def daily_quota(db, today: date | None = None) -> tuple[int, str]:
     total, acc = db.acceptance_stats()
     if total >= 40 and acc / total < lim["min_acceptance_rate"]:
         quota //= 2
-        why += f", acceptance low ({acc}/{total}) to aadha"
+        why += f", low acceptance ({acc}/{total}) so halved"
 
     room = lim["weekly_cap"] - db.sent_in_last_days(7)
     if room < quota:
         quota = max(0, room)
-        why += f", weekly cap ({lim['weekly_cap']}) ke paas"
+        why += f", near weekly cap ({lim['weekly_cap']})"
 
     return quota, why
 
 
 class Pacer:
-    """Profiles ke beech gap, aur beech-beech mein lamba break."""
+    """Gaps between profiles, with an occasional longer break."""
 
     def __init__(self, fast=False):
         p = dict(CFG["pacing"])
-        if fast:  # test run: chhote gaps
+        if fast:  # test run: short gaps
             p.update(between_profiles_sec=[5, 12], break_every=[999, 999])
         self.p = p
         self.count = 0

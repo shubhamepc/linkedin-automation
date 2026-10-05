@@ -17,7 +17,7 @@ DATA.mkdir(exist_ok=True)
 LOGS.mkdir(exist_ok=True)
 load_dotenv(ROOT / ".env")
 
-# Windows Command Prompt mein emoji / Hindi text crash na kare
+# Keep emoji output from crashing the Windows Command Prompt
 for stream in (sys.stdout, sys.stderr):
     try:
         stream.reconfigure(encoding="utf-8", errors="replace")

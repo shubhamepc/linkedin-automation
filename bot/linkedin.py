@@ -1,4 +1,4 @@
-"""LinkedIn page actions. Selectors English UI ke liye hain — LinkedIn language English rakhein."""
+"""LinkedIn page actions. Selectors target the English UI — keep your LinkedIn language set to English."""
 import os
 import random
 import re
@@ -17,7 +17,7 @@ BASE = "https://www.linkedin.com"
 
 
 class SafetyStop(Exception):
-    """LinkedIn ne checkpoint / warning / limit dikhaya — aaj ke liye ruk jao."""
+    """LinkedIn showed a checkpoint / warning / limit — stop for today."""
 
     def __init__(self, msg, cooldown_days=2):
         super().__init__(msg)
@@ -36,8 +36,8 @@ def open_browser(pw):
     except PWError:
         if not channel:
             raise
-        # Google Chrome installed nahi hai — Playwright ka Chromium use karo
-        log.info("Chrome nahi mila, built-in Chromium use kar rahe hain")
+        # Google Chrome not installed — use Playwright's Chromium
+        log.info("Google Chrome not found, using built-in Chromium")
         ctx = pw.chromium.launch_persistent_context(str(BROWSER_PROFILE), **opts)
     page = ctx.pages[0] if ctx.pages else ctx.new_page()
     page.set_default_timeout(15000)
@@ -45,7 +45,7 @@ def open_browser(pw):
 
 
 def find_chrome() -> str | None:
-    """Installed Google Chrome ka path (login ke liye normal window kholne ke kaam aata hai)."""
+    """Path of the installed Google Chrome (used to open a normal window for login)."""
     candidates = {
         "darwin": ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
                    str(Path.home() / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome")],
@@ -60,15 +60,15 @@ def find_chrome() -> str | None:
 
 
 def open_plain_chrome(url: str) -> subprocess.Popen | None:
-    """Bina automation ke normal Chrome window — usi profile folder ke saath jo bot use karta hai.
-    Login yahan karne se LinkedIn ko bilkul normal browser dikhta hai."""
+    """A normal Chrome window without automation, using the same profile folder as the bot.
+    Logging in here looks to LinkedIn like any regular browser."""
     chrome = find_chrome()
     if not chrome:
         return None
     BROWSER_PROFILE.mkdir(parents=True, exist_ok=True)
     args = [chrome, f"--user-data-dir={BROWSER_PROFILE}", "--no-first-run",
             "--no-default-browser-check", "--new-window"]
-    # Cookies usi tarah encrypt hon jaise Playwright padhta hai, warna bot ko login nahi dikhega
+    # Encrypt cookies the way Playwright reads them, otherwise the bot won't see the login
     if sys.platform == "darwin":
         args.append("--use-mock-keychain")
     elif sys.platform.startswith("linux"):
@@ -103,7 +103,7 @@ def check_safety(page: Page):
     url = page.url
     if any(m in url for m in SAFETY_URL_MARKERS):
         if "/uas/login" in url or "/login" in url:
-            raise NotLoggedIn("LinkedIn login expire ho gaya — `python run.py login` chalao")
+            raise NotLoggedIn("LinkedIn is not logged in (or the login expired) — run: python run.py login")
         raise SafetyStop(f"LinkedIn security check page: {url}", cooldown_days=3)
     try:
         body = page.locator("body").inner_text(timeout=5000)[:20000]
@@ -122,7 +122,7 @@ def goto(page: Page, url: str):
 def ensure_logged_in(page: Page):
     goto(page, f"{BASE}/feed/")
     if "/feed" not in page.url:
-        raise NotLoggedIn("LinkedIn par login nahi hai — `python run.py login` chalao")
+        raise NotLoggedIn("LinkedIn is not logged in — run: python run.py login")
 
 
 # ---------- my profile ----------
@@ -157,13 +157,13 @@ MORE_SEL = 'button[aria-label="More actions"], button[aria-label="More"]'
 
 
 def profile_name(page: Page) -> str:
-    """Page title 'Naam | LinkedIn' se naam (h1/h2 badalte rehte hain, title nahi)."""
+    """Name from the page title 'Name | LinkedIn' (h1/h2 change often, the title does not)."""
     name = page.title().split("|")[0].strip()
-    return re.sub(r"^\(\d+\)\s*", "", name)  # "(3) Naam" = notification count
+    return re.sub(r"^\(\d+\)\s*", "", name)  # "(3) Name" = notification count
 
 
 def _top_card(page: Page):
-    """Profile ka top card: woh (sabse andar wala) section jiski heading mein us insaan ka naam hai."""
+    """Profile top card: the innermost section whose heading is this person's name."""
     name = profile_name(page)
     for tag in ("h1", "h2"):
         heading = page.locator(tag, has_text=name) if name else page.locator(tag)
@@ -174,7 +174,7 @@ def _top_card(page: Page):
 
 
 def _connect_sel(page: Page) -> str:
-    """Sirf ISI insaan ka Connect button — 'People you may know' wale kisi aur ka nahi."""
+    """Only THIS person's Connect button — never someone from 'People you may know'."""
     name = profile_name(page).replace('"', '\\"')
     if name:
         return (f'[aria-label="Invite {name} to connect"], '
@@ -197,7 +197,7 @@ SKIP_LINE = re.compile(r"^(·\s*)?(1st|2nd|3rd\+?)\b|degree connection|^(he|she|
 
 
 def top_card_info(page: Page) -> dict:
-    """Naam, headline, current company — profile ke top card se."""
+    """Name, headline and current company from the profile top card."""
     top = _top_card(page)
     name = profile_name(page)
 
@@ -234,7 +234,11 @@ def connection_state(page: Page) -> str:
     if more.count():
         more.first.click()
         sleep_range(0.8, 1.6)
-        found = page.locator(_connect_sel(page)).filter(visible=True).count() > 0
+        try:  # the menu animates open — give it a moment
+            page.locator(_connect_sel(page)).filter(visible=True).first.wait_for(timeout=3000)
+            found = True
+        except PWTimeout:
+            found = False
         page.keyboard.press("Escape")
         sleep_range(0.5, 1)
         if found:
@@ -276,7 +280,7 @@ def send_invite(page: Page, note: str | None, via_more: bool) -> str:
     email_required | limit | failed"""
     dlg = _open_connect_dialog(page, via_more)
     if dlg is None:
-        log.warning("Connect dialog nahi khula")
+        log.warning("Connect dialog did not open")
         return "failed"
 
     text = dlg.inner_text()
@@ -294,13 +298,13 @@ def send_invite(page: Page, note: str | None, via_more: bool) -> str:
             add.first.click()
             sleep_range(1, 2)
         if NOTES_EXHAUSTED_TEXT.search(_dialog(page).inner_text()):
-            # Free account: is mahine ke custom notes khatam — Premium offer band karke bina note bhejo
-            log.info("   LinkedIn free notes khatam (Premium nahi hai)")
+            # Free account used up this month's custom notes — close the Premium offer, send without a note
+            log.info("   LinkedIn free notes used up for this month (no Premium)")
             notes_exhausted = True
             _close_dialog(page)
             if not CFG["ai"].get("send_without_note_if_note_fails", True):
                 return "notes_exhausted"
-            page.reload(wait_until="domcontentloaded")  # popup ke baad layout badal jaata hai
+            page.reload(wait_until="domcontentloaded")  # the layout changes after the popup
             sleep_range(3, 5)
             dlg = _open_connect_dialog(page, via_more)
             if dlg is None:
@@ -322,7 +326,7 @@ def send_invite(page: Page, note: str | None, via_more: bool) -> str:
     if not send.count():
         send = dlg.get_by_role("button", name=re.compile(r"send without a note", re.I))
     if not send.count():
-        log.warning("Send button nahi mila")
+        log.warning("Send button not found")
         _close_dialog(page)
         return "failed"
     send.first.click()
@@ -332,7 +336,7 @@ def send_invite(page: Page, note: str | None, via_more: bool) -> str:
         _close_dialog(page)
         return "limit"
     if _dialog(page).count():
-        # dialog abhi bhi khula hai — kuch atka
+        # dialog still open — something got stuck
         _close_dialog(page)
         return "failed"
     if note_added:

@@ -1,4 +1,4 @@
-"""Free mode (bina AI): keywords se score, templates se note."""
+"""FREE mode (no AI): score by keywords, notes from templates."""
 import random
 import re
 
@@ -14,7 +14,7 @@ def _has(keyword: str, text: str) -> bool:
 
 
 def suggest_keywords(headline: str) -> list[str]:
-    """Headline ke tukdon se keyword suggestions, e.g. 'Founder @ X | D2C Growth' -> ['Founder', 'D2C Growth']."""
+    """Keyword suggestions from headline parts, e.g. 'Founder @ X | D2C Growth' -> ['Founder', 'D2C Growth']."""
     parts = re.split(r"\s*(?:[|•·,/]| at | @ |@)\s*", headline or "")
     out = []
     for p in parts:
@@ -46,12 +46,12 @@ def evaluate_rules(me: MyProfile, info: dict, text: str) -> Evaluation:
         score, reason = 0, f"skip keyword: {', '.join(excluded)}"
     elif head_hits:
         score = min(100, 75 + 10 * (len(head_hits) - 1) + 5 * len(body_hits))
-        reason = f"headline mein: {', '.join(head_hits)}"
+        reason = f"in headline: {', '.join(head_hits)}"
     elif body_hits:
-        score = min(80, 45 + 10 * len(body_hits))  # body mein match kam bharosemand
-        reason = f"profile mein: {', '.join(body_hits)}"
+        score = min(80, 45 + 10 * len(body_hits))  # matches outside the headline are less reliable
+        reason = f"in profile: {', '.join(body_hits)}"
     else:
-        score, reason = 0, "koi keyword match nahi"
+        score, reason = 0, "no keyword match"
 
     topic = (head_hits or body_hits or ["your field"])[0]
     return Evaluation(

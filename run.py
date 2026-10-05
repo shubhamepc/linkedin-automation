@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """LinkedIn Automation — CLI (Windows / macOS / Linux)
 
-  python run.py start                 # ⭐ pehli baar: sab kuch step-by-step (key, login, niche, test, schedule)
+  python run.py start                 # first time: guided setup (mode, login, keywords, test, schedule)
 
-  python run.py login                 # LinkedIn login (browser khulega, aap khud login karoge)
-  python run.py setup                 # aapki profile se niche/ICP dobara banao
-  python run.py run --dry-run         # test: 3 profiles visit + score + note, kuch send nahi
-  python run.py run                   # aaj ka run (quota ke hisaab se)
+  python run.py login                 # connect / re-connect your LinkedIn account
+  python run.py setup                 # change who you want to connect with
+  python run.py run --dry-run         # test: check 3 profiles, send nothing
+  python run.py run                   # today's run (respects the daily quota)
   python run.py stats                 # report
-  python run.py schedule              # roz config.yaml ke time par auto-run
+  python run.py schedule              # run automatically every day (time from config.yaml)
   python run.py unschedule
 """
 import argparse
@@ -25,6 +25,7 @@ from bot.config import CFG, LOGS, MY_PROFILE_PATH, ROOT, log
 TASK_NAME = "LinkedInAutomation"
 PLIST_LABEL = "com.linkedin-automation.daily"
 PLIST_PATH = Path.home() / "Library/LaunchAgents" / f"{PLIST_LABEL}.plist"
+PY = r".venv\Scripts\python" if sys.platform == "win32" else ".venv/bin/python"
 
 
 def ask(q: str, default: str = "") -> str:
@@ -40,7 +41,7 @@ def yes(q: str, default=True) -> bool:
 # ---------------- login ----------------
 
 def check_login() -> bool:
-    """Bot wale browser profile mein LinkedIn logged-in hai ya nahi."""
+    """Is LinkedIn logged in inside the bot's browser profile?"""
     from playwright.sync_api import sync_playwright
     from bot.linkedin import open_browser
 
@@ -58,33 +59,33 @@ def login_flow() -> bool:
     from bot.linkedin import open_plain_chrome
 
     if check_login():
-        print("✅ LinkedIn pehle se connected hai.")
+        print("✅ LinkedIn is already connected.")
         return True
 
     proc = open_plain_chrome("https://www.linkedin.com/login")
     if proc:
-        quit_key = "Cmd + Q" if sys.platform == "darwin" else "window band (X)"
-        print("\n👉 Ek nayi Chrome window khuli hai (normal Chrome, koi automation nahi).")
-        print("   1. Usme apne LinkedIn account se login karo (OTP/2FA bhi).")
-        print("   2. Feed (home page) dikh jaye to 10 second ruko,")
-        print(f"   3. phir us Chrome ko {quit_key} se band karo — tabhi login save hota hai.")
-        print("   Password sirf browser mein daalna — yeh tool use store nahi karta.")
-        print("   ⏳ Chrome band hone ka wait kar rahe hain…")
+        quit_how = "press Cmd + Q" if sys.platform == "darwin" else "close the window (X)"
+        print("\n👉 A new Chrome window has opened (normal Chrome, no automation).")
+        print("   1. Log in to your LinkedIn account there (including OTP / 2FA).")
+        print("   2. When your LinkedIn feed (home page) appears, wait 10 seconds,")
+        print(f"   3. then {quit_how} on that Chrome — the login is saved only then.")
+        print("   Type your password only in the browser — this tool never sees or stores it.")
+        print("   ⏳ Waiting for that Chrome to close…")
         proc.wait()
     else:
-        # Chrome installed nahi — Playwright window mein hi login
+        # Google Chrome not installed — log in inside the Playwright browser instead
         from playwright.sync_api import sync_playwright
         from bot.linkedin import open_browser
         with sync_playwright() as pw:
             ctx, page = open_browser(pw)
             page.goto("https://www.linkedin.com/login")
-            print("\n👉 Khuli hui browser window mein LinkedIn login karo.")
-            input("   Feed dikhne lage to yahan Enter dabao… ")
+            print("\n👉 Log in to LinkedIn in the browser window that just opened.")
+            input("   When your feed appears, press Enter here… ")
             ctx.close()
 
     ok = check_login()
-    print("✅ LinkedIn connect ho gaya, session save hai." if ok
-          else "⚠️  Login confirm nahi hua — dobara try karo: python run.py login")
+    print("✅ LinkedIn connected — session saved." if ok
+          else f"⚠️  Could not confirm the login. Try again: {PY} run.py login")
     return ok
 
 
@@ -93,7 +94,7 @@ def cmd_login(_):
 
 
 def setup_keywords(page):
-    """Free mode: aapki headline se suggestions, aap confirm/edit karo."""
+    """FREE mode: suggest keywords from your headline, you confirm or edit them."""
     from bot import linkedin as li
     from bot.ai import load_my_profile, save_my_profile
     from bot.rules import DEFAULT_EXCLUDE, build_profile, suggest_keywords
@@ -101,16 +102,17 @@ def setup_keywords(page):
     li.goto(page, "https://www.linkedin.com/in/me/")
     info = li.top_card_info(page)
     old = load_my_profile()
-    print(f"\n   Aap: {info['name']} — {info['headline']}")
-    print("\n   Kin logon se connect karna hai? Unki headline/profile mein kya likha hota hai?")
-    print("   Comma se alag likho, e.g.:  founder, marketing manager, D2C, HR head")
+    print(f"\n   You: {info['name']} — {info['headline']}")
+    print("\n   Who do you want to connect with? What words appear in THEIR headline/profile?")
+    print("   Separate with commas, e.g.:  founder, marketing manager, D2C, HR head")
     default = ", ".join(old.ideal_connections if old else suggest_keywords(info["headline"]))
     targets = split_list(ask("   Target keywords", default))
-    excl = split_list(ask("   Inhe skip karo", ", ".join(old.not_relevant if old else DEFAULT_EXCLUDE)))
-    queries = split_list(ask("   LinkedIn search mein kya type karein", ", ".join(
+    excl = split_list(ask("   Skip people whose headline has", ", ".join(
+        old.not_relevant if old else DEFAULT_EXCLUDE)))
+    queries = split_list(ask("   What to type in LinkedIn search", ", ".join(
         old.search_queries if old else targets)))
     if not targets:
-        sys.exit("Kam se kam ek target keyword chahiye.")
+        sys.exit("At least one target keyword is needed.")
     me = build_profile(info["name"], info["headline"], targets, excl, queries or targets)
     save_my_profile(me)
     return me
@@ -150,24 +152,25 @@ def cmd_setup(_):
 
 def ensure_api_key():
     if os.environ.get("ANTHROPIC_API_KEY"):
-        print("✅ Claude API key mili.")
+        print("✅ Claude API key found.")
         return
-    print("\nClaude API key chahiye (profiles score karne aur notes likhne ke liye).")
-    print("Yahan banao: https://platform.claude.com/settings/keys")
-    key = getpass.getpass("API key paste karo (dikhegi nahi): ").strip()
+    print("\nAI mode needs a Claude API key (to score profiles and write notes).")
+    print("Create one here: https://platform.claude.com/settings/keys")
+    print("(Or put it in the .env file as ANTHROPIC_API_KEY=... and run this again.)")
+    key = getpass.getpass("Paste your API key (it stays hidden): ").strip()
     if not key:
-        sys.exit("API key ke bina aage nahi badh sakte.")
+        sys.exit("Cannot continue AI mode without an API key.")
     env = ROOT / ".env"
     lines = [l for l in (env.read_text().splitlines() if env.exists() else [])
              if not l.startswith("ANTHROPIC_API_KEY=")]
     lines.append(f"ANTHROPIC_API_KEY={key}")
     env.write_text("\n".join(lines) + "\n")
     os.environ["ANTHROPIC_API_KEY"] = key
-    print("✅ .env mein save ho gaya.")
+    print("✅ Saved to .env")
 
 
 def set_config_line(key: str, value: str):
-    """config.yaml mein ek line badlo (comments waise hi rehte hain)."""
+    """Change one line in config.yaml (keeps all comments)."""
     path = ROOT / "config.yaml"
     text = re.sub(rf"(^\s*{key}:\s*)(\"[^\"]*\"|\S+)", rf"\g<1>{value}", path.read_text(), count=1, flags=re.M)
     path.write_text(text)
@@ -185,9 +188,9 @@ def cmd_start(_):
 
     print("\n=== LinkedIn Automation — setup ===\n")
     print("Step 1/5 · Mode")
-    print("   FREE mode : aapke keywords se profiles chunega, template se note (koi kharcha nahi)")
-    print("   AI mode   : Claude har profile padhkar personal note likhega (paid, ~$1/din)")
-    use_ai = yes("   AI mode use karein?", default=CFG["ai"].get("mode") == "claude")
+    print("   FREE mode : picks people by your keywords, notes from templates (no cost)")
+    print("   AI mode   : Claude reads each profile and writes a personal note (paid, ~$1/day)")
+    use_ai = yes("   Use AI mode?", default=CFG["ai"].get("mode") == "claude")
     mode = "claude" if use_ai else "rules"
     set_config_line("mode", mode)
     CFG["ai"]["mode"] = mode
@@ -196,39 +199,39 @@ def cmd_start(_):
     else:
         print("✅ FREE mode.")
 
-    print("\nStep 2/5 · LinkedIn connect")
+    print("\nStep 2/5 · Connect LinkedIn")
     if not login_flow():
-        sys.exit("Login ke bina aage nahi badh sakte. Dobara: python run.py start")
+        sys.exit(f"Cannot continue without a LinkedIn login. Run again: {PY} run.py start")
 
-    print("\nStep 3/5 · Kin logon se connect karna hai")
+    print("\nStep 3/5 · Who to connect with")
     with sync_playwright() as pw:
         ctx, page = li.open_browser(pw)
         try:
-            redo = load_my_profile() is not None and yes("Pehle wali settings badalni hain?", default=False)
+            redo = load_my_profile() is not None and yes("Change your previous settings?", default=False)
             me = setup_niche(page, redo=redo)
-            print(f"\n   Aapka niche     : {me.my_niche}")
-            print("   Kisse connect   : " + "\n                     ".join(me.ideal_connections))
+            print(f"\n   Your niche      : {me.my_niche}")
+            print("   Connect with    : " + "\n                     ".join(me.ideal_connections))
             print(f"   Search keywords : {', '.join(me.search_queries)}")
-            print(f"   (badalna ho to edit karo: {MY_PROFILE_PATH})")
+            print(f"   (to change later: {PY} run.py setup)")
         finally:
             ctx.close()
 
-    print("\nStep 4/5 · Test run (3 profiles dekhega, kuch SEND nahi karega)")
-    if yes("Test run karein?"):
+    print("\nStep 4/5 · Test run (checks 3 profiles, sends NOTHING)")
+    if yes("Run the test?"):
         from bot.daily import run_daily
         run_daily(dry_run=True, force=True, max_invites=3)
 
-    print("\nStep 5/5 · Roz automatic chalana")
-    if yes("Daily schedule set karein?"):
-        t = ask("Roz kis time start ho (24h HH:MM)", CFG["schedule"]["time"])
+    print("\nStep 5/5 · Run automatically every day")
+    if yes("Set up the daily schedule?"):
+        t = ask("Daily start time (24h HH:MM)", CFG["schedule"]["time"])
         if re.fullmatch(r"\d{1,2}:\d{2}", t):
             set_schedule_time(t)
         cmd_schedule(None)
 
-    print("\n🎉 Ho gaya! Useful commands:")
-    print("   python run.py stats          # report")
-    print("   python run.py run            # abhi manually aaj ka run")
-    print("   python run.py unschedule     # auto-run band\n")
+    print("\n🎉 All set! Useful commands:")
+    print(f"   {PY} run.py stats          # report")
+    print(f"   {PY} run.py run            # run today's batch now")
+    print(f"   {PY} run.py unschedule     # stop the daily run\n")
 
 
 # ---------------- run / stats ----------------
@@ -248,11 +251,11 @@ def cmd_stats(_):
     print("\n📊 Profiles by status")
     for k, v in sorted(counts.items(), key=lambda x: -x[1]):
         print(f"   {k:<16} {v}")
-    print(f"\n   Last 7 days sent : {db.sent_in_last_days(7)} / {CFG['limits']['weekly_cap']}")
+    print(f"\n   Sent in last 7 days : {db.sent_in_last_days(7)} / {CFG['limits']['weekly_cap']}")
     if total:
-        print(f"   Acceptance rate  : {acc}/{total} = {acc * 100 // total}%")
+        print(f"   Acceptance rate     : {acc}/{total} = {acc * 100 // total}%")
     if db.get("cooldown_until"):
-        print(f"   Cooldown until   : {db.get('cooldown_until')}")
+        print(f"   Paused until        : {db.get('cooldown_until')}")
     print("\n🗓  Recent runs")
     for r in db.recent_runs():
         print(f"   {r['day']}  quota {r['quota']:>2}  sent {r['sent']:>2}  visited {r['visited']:>2}  {r['summary'] or ''}")
@@ -290,8 +293,8 @@ def cmd_schedule(_):
         cur = subprocess.run(["crontab", "-l"], capture_output=True, text=True).stdout
         new = "\n".join(l for l in cur.splitlines() if TASK_NAME not in l) + "\n" + line + "\n"
         subprocess.run(["crontab", "-"], input=new.lstrip(), text=True, check=True)
-    print(f"✅ Roz {hh:02d}:{mm:02d} (+0-{CFG['schedule']['start_jitter_minutes']} min random) par chalega.")
-    print("   Us waqt computer on hona chahiye aur aap usme logged-in hone chahiye.")
+    print(f"✅ Will run every day at {hh:02d}:{mm:02d} (+ a random 0-{CFG['schedule']['start_jitter_minutes']} min delay).")
+    print("   Your computer must be on and you must be logged in to it at that time.")
 
 
 def cmd_unschedule(_):
@@ -304,32 +307,37 @@ def cmd_unschedule(_):
         cur = subprocess.run(["crontab", "-l"], capture_output=True, text=True).stdout
         new = "\n".join(l for l in cur.splitlines() if TASK_NAME not in l) + "\n"
         subprocess.run(["crontab", "-"], input=new.lstrip(), text=True)
-    print("✅ Daily schedule hata diya.")
+    print("✅ Daily schedule removed.")
 
 
 def main():
     ap = argparse.ArgumentParser(description="LinkedIn connection automation")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("start", help="pehli baar ka guided setup").set_defaults(fn=cmd_start)
-    sub.add_parser("login").set_defaults(fn=cmd_login)
-    sub.add_parser("setup").set_defaults(fn=cmd_setup)
-    r = sub.add_parser("run")
-    r.add_argument("--dry-run", action="store_true", help="visit + score, kuch send nahi")
-    r.add_argument("--force", action="store_true", help="aaj dobara chalao")
-    r.add_argument("--max", type=int, help="aaj ka quota manually set karo")
+    sub.add_parser("start", help="first-time guided setup").set_defaults(fn=cmd_start)
+    sub.add_parser("login", help="connect / re-connect LinkedIn").set_defaults(fn=cmd_login)
+    sub.add_parser("setup", help="change who to connect with").set_defaults(fn=cmd_setup)
+    r = sub.add_parser("run", help="run today's batch")
+    r.add_argument("--dry-run", action="store_true", help="check profiles, send nothing")
+    r.add_argument("--force", action="store_true", help="run again even if today's run is done")
+    r.add_argument("--max", type=int, help="override today's invite quota")
     r.add_argument("--scheduled", action="store_true", help=argparse.SUPPRESS)
     r.set_defaults(fn=cmd_run)
-    sub.add_parser("stats").set_defaults(fn=cmd_stats)
-    sub.add_parser("schedule").set_defaults(fn=cmd_schedule)
-    sub.add_parser("unschedule").set_defaults(fn=cmd_unschedule)
+    sub.add_parser("stats", help="show report").set_defaults(fn=cmd_stats)
+    sub.add_parser("schedule", help="run automatically every day").set_defaults(fn=cmd_schedule)
+    sub.add_parser("unschedule", help="stop the daily run").set_defaults(fn=cmd_unschedule)
     args = ap.parse_args()
+
     from bot.ai import AIError
+    from bot.linkedin import NotLoggedIn, SafetyStop
     try:
         args.fn(args)
     except KeyboardInterrupt:
-        log.info("Ruk gaya (Ctrl+C)")
-    except AIError as e:
-        print(f"\n❌ {e}\n   Theek karke dobara chalao: python run.py {args.cmd}")
+        log.info("Stopped (Ctrl+C)")
+    except NotLoggedIn as e:
+        print(f"\n🔑 {e}")
+        sys.exit(1)
+    except (AIError, SafetyStop) as e:
+        print(f"\n❌ {e}\n   Fix it and run again: {PY} run.py {args.cmd}")
         sys.exit(1)
 
 

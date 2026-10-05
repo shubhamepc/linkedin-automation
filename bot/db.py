@@ -80,6 +80,10 @@ class DB:
         return self.conn.execute(
             "SELECT COUNT(*) FROM profiles WHERE sent_at >= ?", (since,)).fetchone()[0]
 
+    def sent_since(self, iso_day: str) -> int:
+        return self.conn.execute(
+            "SELECT COUNT(*) FROM profiles WHERE sent_at >= ?", (iso_day,)).fetchone()[0]
+
     def first_sent_at(self):
         return self.conn.execute("SELECT MIN(sent_at) FROM profiles").fetchone()[0]
 
@@ -99,7 +103,7 @@ class DB:
         return n
 
     def acceptance_stats(self, min_age_days=7):
-        """Sirf woh invites gino jo kam se kam min_age_days purane hain (unhe jawab dene ka time mila)."""
+        """Only count invites at least min_age_days old (people have had time to respond)."""
         cutoff = (datetime.now() - timedelta(days=min_age_days)).isoformat()
         row = self.conn.execute(
             "SELECT COUNT(*) AS total, SUM(status='accepted') AS acc FROM profiles "
@@ -121,9 +125,10 @@ class DB:
         self.conn.commit()
         return cur.lastrowid
 
-    def finish_run(self, run_id, visited, sent, summary):
+    def finish_run(self, run_id, visited, sent, summary, completed=True):
+        """completed=False (login/AI/browser problem): record it, but today's run can still happen later."""
         self.conn.execute("UPDATE runs SET finished_at=?, visited=?, sent=?, summary=? WHERE id=?",
-                          (now(), visited, sent, summary, run_id))
+                          (now() if completed else None, visited, sent, summary, run_id))
         self.conn.commit()
 
     def recent_runs(self, n=10):

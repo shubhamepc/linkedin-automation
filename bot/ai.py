@@ -1,4 +1,4 @@
-"""Claude se: (1) aapki profile se niche/ICP samajhna, (2) har profile ko score karna + note likhna."""
+"""AI mode (Claude): (1) understand your niche from your profile, (2) score each profile + write a note."""
 import json
 
 import anthropic
@@ -54,19 +54,19 @@ def _parse(system: str, user: str, schema):
             output_format=schema,
         )
     except anthropic.AuthenticationError as e:
-        raise AIError("Claude API key galat hai ya set nahi hai (.env mein ANTHROPIC_API_KEY)") from e
+        raise AIError("Claude API key is wrong or missing (ANTHROPIC_API_KEY in .env)") from e
     except anthropic.RateLimitError as e:
-        raise AIError("Claude API rate limit — thodi der baad") from e
+        raise AIError("Claude API rate limit — try again later") from e
     except anthropic.APIStatusError as e:
         if "credit balance" in str(e.message).lower():
-            raise AIError("Claude API account mein credits khatam hain — "
-                          "https://platform.claude.com/settings/billing par credits add karo") from e
+            raise AIError("Your Claude API account has no credits — "
+                          "add credits at https://platform.claude.com/settings/billing (or switch to FREE mode)") from e
         raise AIError(f"Claude API error {e.status_code}: {e.message}") from e
     except anthropic.APIConnectionError as e:
-        raise AIError("Claude API tak network nahi pahuncha") from e
+        raise AIError("Could not reach the Claude API (network)") from e
 
     if resp.stop_reason == "refusal" or resp.parsed_output is None:
-        raise AIError(f"Claude ne jawab nahi diya (stop_reason={resp.stop_reason})")
+        raise AIError(f"Claude did not return an answer (stop_reason={resp.stop_reason})")
     return resp.parsed_output
 
 
@@ -143,9 +143,9 @@ def fit_note(note: str, max_chars: int) -> str:
     note = " ".join(note.split())
     if len(note) <= max_chars:
         return note
-    log.warning("Note %d chars ka tha, chhota kar rahe hain", len(note))
+    log.warning("Note was %d chars, shortening it", len(note))
     cut = note[:max_chars]
-    # last full sentence tak, warna last word tak
+    # cut at the last full sentence, else at the last word
     for sep in (". ", "! ", "? "):
         i = cut.rfind(sep)
         if i > max_chars * 0.6:

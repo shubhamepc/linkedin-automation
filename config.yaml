@@ -1,41 +1,41 @@
 # LinkedIn Automation — settings
-# Values ko zarurat ke hisaab se badal sakte ho. Safe defaults pehle se set hain.
+# Change anything you like. Safe defaults are already set.
 
 schedule:
-  time: "10:30"              # roz kis time start ho (24h, Mac ka local time)
-  start_jitter_minutes: 75   # start time mein random 0-75 min ki deri (har din alag lage)
+  time: "10:30"              # daily start time (24h, your computer's local time)
+  start_jitter_minutes: 75   # random 0-75 min delay so it starts at a different time each day
   active_days: [mon, tue, wed, thu, fri, sat]   # sunday off
 
 limits:
-  weekly_cap: 80             # pichhle 7 din mein max invites (LinkedIn ~100/week allow karta hai)
-  warmup:                    # pehle hafte / doosre hafte roz ke [min, max] invites
+  weekly_cap: 80             # max invites in any 7 days (LinkedIn allows ~100/week)
+  warmup:                    # [min, max] invites per day in week 1 / week 2
     - [5, 8]
     - [8, 14]
-  normal: [12, 22]           # warm-up ke baad weekdays par
+  normal: [12, 22]           # weekdays after the warm-up
   saturday: [3, 7]
-  skip_day_chance: 0.07      # kabhi-kabhi poora din skip (insaan bhi chhutti leta hai)
-  max_profile_visits: 70     # ek din mein max profile visits
-  visits_per_invite: 3.5     # quota ke hisaab se visit limit
-  withdraw_after_days: 21    # itne din se pending invites withdraw honge
+  skip_day_chance: 0.07      # sometimes skip a whole day (people take days off too)
+  max_profile_visits: 70     # max profile visits per day
+  visits_per_invite: 3.5     # visits allowed per invite in the quota
+  withdraw_after_days: 21    # withdraw invites pending longer than this
   max_withdraw_per_day: 5
-  min_acceptance_rate: 0.20  # isse kam acceptance par volume aadha ho jayega
+  min_acceptance_rate: 0.20  # below this acceptance rate the daily volume is halved
 
 pacing:
   between_profiles_sec: [40, 140]
-  break_every: [5, 9]        # har 5-9 profiles ke baad ek lamba break
+  break_every: [5, 9]        # a longer break every 5-9 profiles
   break_minutes: [3, 9]
 
 ai:
   mode: rules                # rules = FREE (keywords + note templates) | claude = AI (paid, best quality)
   model: claude-opus-5-5
-  effort: low                # low = sasta aur fast; quality ke liye "medium"
+  effort: low                # low = cheaper and faster; "medium" for higher quality
   min_score: 70              # 0-100; isse upar wale hi invite honge
-  note_max_chars: 280        # Premium limit 300 hai; thoda margin rakha
+  note_max_chars: 280        # Premium limit is 300; keeps a small margin
   note_language: English
   send_without_note_if_note_fails: true
 
-rules:                       # sirf free mode (mode: rules) mein use hota hai
-  # Placeholders: {first_name} {company} {topic} (match hua keyword) {my_name}
+rules:                       # used only in FREE mode (mode: rules)
+  # Placeholders: {first_name} {company} {topic} (the matched keyword) {my_name}
   note_templates:
     - "Hi {first_name}, came across your profile and liked what you're doing at {company}. Would be great to connect and follow your work!"
     - "Hi {first_name}, your work at {company} caught my eye. Always good to connect with people in a similar space. Happy to connect!"
@@ -47,8 +47,8 @@ rules:                       # sirf free mode (mode: rules) mein use hota hai
 search:
   network: ["S"]             # S = 2nd-degree (best acceptance), O = 3rd+
   pages_per_harvest: 2
-  extra_queries: []          # optional: apne search keywords, e.g. ["D2C founder India"]
+  extra_queries: []          # optional: extra search keywords, e.g. ["D2C founder India"]
 
 browser:
-  channel: chrome            # aapka installed Google Chrome use hoga
+  channel: chrome            # uses your installed Google Chrome
   headless: false
